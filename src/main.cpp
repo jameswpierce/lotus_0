@@ -1,45 +1,51 @@
 #include <Arduino.h>
 #include <MIDIUSB.h>
 
-int s0 = 10;
-int s1 = 16;
-int s2 = 14;
-int s3 = 15;
+const size_t numberOfPotentiometers = 32;
+const uint8_t numberOfInputsPerMultiplexer = 16;
 
-int sig = 0;
+const uint8_t s0 = 15;
+const uint8_t s1 = 14;
+const uint8_t s2 = 16;
+const uint8_t s3 = 10;
+const uint8_t controlPin[] = {s0, s1, s2, s3};
 
-void controlChange(byte channel, byte control, byte value) {
+const uint8_t sigs[] = { 1, 0 };
+
+uint8_t muxChannel[16][4] = {
+  {0,0,0,0},
+  {1,0,0,0},
+  {0,1,0,0},
+  {1,1,0,0}, 
+  {0,0,1,0},
+  {1,0,1,0},
+  {0,1,1,0},
+  {1,1,1,0},
+  {0,0,0,1},
+  {1,0,0,1},
+  {0,1,0,1},
+  {1,1,0,1},
+  {0,0,1,1},
+  {1,0,1,1},
+  {0,1,1,1},
+  {1,1,1,1}
+};
+
+uint8_t controlValues[numberOfPotentiometers] = { 0 };
+
+void controlChange(byte channel, byte control, byte value)
+{
   midiEventPacket_t event = {0x0B, 0xB0 | channel, control, value};
   MidiUSB.sendMIDI(event);
 }
 
-float readMux(int channel)
+float readMux(int channel, uint8_t sig)
 {
-  int controlPin[] = {s0, s1, s2, s3};
-  int muxChannel[16][4] = {
-    {0,0,0,0},
-    {1,0,0,0},
-    {0,1,0,0},
-    {1,1,0,0},
-    {0,0,1,0},
-    {1,0,1,0},
-    {0,1,1,0},
-    {1,1,1,0},
-    {0,0,0,1},
-    {1,0,0,1},
-    {0,1,0,1},
-    {1,1,0,1},
-    {0,0,1,1},
-    {1,0,1,1},
-    {0,1,1,1},
-    {1,1,1,1}
-  };
-
-  for (int i = 0; i < 4; i++) {
+  for (uint8_t i = 0; i < 4; i++) {
     digitalWrite(controlPin[i], muxChannel[channel][i]);
   }
 
-  int val = analogRead(sig) / 8;
+  uint8_t val = analogRead(sig) / 8;
 
   return val;
 }
@@ -59,22 +65,27 @@ void setup()
   Serial.begin(9600);
 }
 
-int controlValues[16] = { 0 };
+
 
 void loop()
 {
-  for (int i = 0; i < 16; i++) {
-    int value = readMux(i);
+  for (uint8_t i = 0; i < numberOfPotentiometers; i++) {
+    uint8_t sig = sigs[i / numberOfInputsPerMultiplexer];
+    uint8_t channel = i % numberOfInputsPerMultiplexer;
+    uint8_t value = readMux(channel, sig);
+
     if (abs(value - controlValues[i]) > 1)
     {
       controlValues[i] = value;
-      controlChange(0, i, controlValues[i]);
+      controlChange(1, i, controlValues[i]);
       MidiUSB.flush();
+      Serial.print(sig);
+      Serial.print(channel);
+      Serial.print("CC");
+      Serial.print(i);
+      Serial.print(": ");
+      Serial.println(controlValues[i]);
     }
-    Serial.print("CC");
-    Serial.print(i);
-    Serial.print(": ");
-    Serial.println(controlValues[i]);
   }
   delay(10);
 }
